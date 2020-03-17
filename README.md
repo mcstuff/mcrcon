@@ -2,6 +2,8 @@
 
 mcrcon is console based Minecraft [rcon](https://developer.valvesoftware.com/wiki/Source_RCON_Protocol) client for remote administration and server maintenance scripts.
 
+This fork attempts to fix the lack of newlines in some packets returned by the vanilla server, and implements the GNU Readline and GNU History libraries.
+
 ---
 
 ### Installing:

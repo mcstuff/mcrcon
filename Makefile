@@ -15,7 +15,7 @@ RM = rm -v -f
 
 CC = gcc
 CFLAGS = -std=gnu99 -Wall -Wextra -Wpedantic -Os -s
-EXTRAFLAGS ?= -fstack-protector-strong
+EXTRAFLAGS ?= -fstack-protector-strong -lreadline
 
 ifeq ($(OS), Windows_NT)
 	LINKER = -lws2_32

@@ -30,6 +30,8 @@
 #include <errno.h>
 #include <unistd.h>
 #include <limits.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #ifdef _WIN32
     // for name resolving on windows
@@ -89,8 +91,7 @@ void        usage(void);
 #ifndef _WIN32
 void        print_color(int color);
 #endif
-int         get_line(char *buffer, int len);
-int         run_terminal_mode(int sock);
+int         run_terminal_mode(int sock, const char *prompt);
 int         run_commands(int argc, char *argv[]);
 
 // Rcon protocol related functions
@@ -163,9 +164,11 @@ int main(int argc, char *argv[])
 	char *host = getenv("MCRCON_HOST");
 	char *pass = getenv("MCRCON_PASS");
 	char *port = getenv("MCRCON_PORT");
+	char *prompt = getenv("MCRCON_PROMPT");
 
 	if (!port) port = "25575";
 	if (!host) host = "localhost";
+	if (!prompt) prompt = ">";
 
 	if(argc < 1 && pass == NULL) usage();
 
@@ -229,7 +232,7 @@ int main(int argc, char *argv[])
 	// auth & commands
 	if (rcon_auth(global_rsock, pass)) {
 		if (terminal_mode)
-			run_terminal_mode(global_rsock);
+			run_terminal_mode(global_rsock, prompt);
 		else
 			exit_code = run_commands(argc, argv);
 	}
@@ -673,16 +676,17 @@ int run_commands(int argc, char *argv[])
 }
 
 // interactive terminal mode
-int run_terminal_mode(int sock)
+int run_terminal_mode(int sock, const char *prompt)
 {
 	int ret = 0;
-	char command[DATA_BUFFSIZE] = {0x00};
 
 	puts("Logged in. Type 'quit' or 'exit' to quit.");
 
+	using_history();
+
 	while (global_connection_alive) {
-		putchar('>');
-		int len = get_line(command, DATA_BUFFSIZE);
+		char *command = readline(prompt);
+		int len = strlen(command);
 
 		if ((strcasecmp(command, "exit") && strcasecmp(command, "quit")) == 0)
 			break;
@@ -690,8 +694,10 @@ int run_terminal_mode(int sock)
 		if(command[0] == 'Q' && command[1] == 0)
 			break;
 
-		if(len > 0 && global_connection_alive)
+		if(len > 0 && global_connection_alive) {
 			ret += rcon_command(sock, command);
+			if(len > 0) add_history(command);
+		}
 
 		/* Special case for "stop" command to prevent server-side bug.
 		 * https://bugs.mojang.com/browse/MC-154617
@@ -704,32 +710,8 @@ int run_terminal_mode(int sock)
 			break;
 		}
 
-		command[0] = len = 0;
+		if (command != NULL) free(command);
 	}
 
 	return ret;
-}
-
-// gets line from stdin and deals with rubbish left in the input buffer
-int get_line(char *buffer, int bsize)
-{
-	char *ret = fgets(buffer, bsize, stdin);
-	if (ret == NULL)
-		exit(EXIT_FAILURE);
-
-	if (buffer[0] == 0)
-		global_connection_alive = 0;
-
-	// remove unwanted characters from the buffer
-	buffer[strcspn(buffer, "\r\n")] = '\0';
-
-	int len = strlen(buffer);
-
-	// clean input buffer if needed
-	if (len == bsize - 1) {
-		int ch;
-		while ((ch = getchar()) != '\n' && ch != EOF);
-	}
-
-	return len;
 }
