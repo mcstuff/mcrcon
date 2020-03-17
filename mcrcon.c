@@ -70,7 +70,7 @@ typedef struct _rc_packet {
 
 
 // ===================================
-//  FUNCTION DEFINITIONS              
+//  FUNCTION DEFINITIONS
 // ===================================
 
 // Network related functions
@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
 	char *host = getenv("MCRCON_HOST");
 	char *pass = getenv("MCRCON_PASS");
 	char *port = getenv("MCRCON_PORT");
-	
+
 	if (!port) port = "25575";
 	if (!host) host = "localhost";
 
@@ -512,7 +512,6 @@ void print_color(int color)
 	}
 }
 
-// this hacky mess might use some optimizing
 void packet_print(rc_packet *packet)
 {
 	if (global_raw_output == 1) {
@@ -522,7 +521,6 @@ void packet_print(rc_packet *packet)
 		return;
 	}
 
-	int i;
 	int def_color = 0;
 
 	#ifdef _WIN32
@@ -532,31 +530,61 @@ void packet_print(rc_packet *packet)
 		} else def_color = 0x37;
 	#endif
 
-	// colors enabled so try to handle the bukkit colors for terminal
-	if (global_disable_colors == 0) {
-		for (i = 0; (unsigned char) packet->data[i] != 0; ++i) {
-			if (packet->data[i] == 0x0A) print_color(def_color);
-			else if((unsigned char) packet->data[i] == 0xc2 && (unsigned char) packet->data[i+1] == 0xa7) {
-				print_color(packet->data[i+=2]);
-				continue;
-			}
-			putchar(packet->data[i]);
-		}
-		print_color(def_color); // cancel coloring
+	// correctly format errors that are issued by the vanilla server
+	const char *badcmd = "Unknown command";
+	const int badcmdlen = strlen(badcmd);
+	const char *badarg = "Incorrect argument for command";
+	const int badarglen = strlen(badarg);
+	size_t offset = 0;
+
+	/*
+	 * Only want to print a newline if there isn't one already present.
+	 * We also don't want to print one if the correctly formatted bukkit
+	 * response 'Unknown command. Type "/help" for help.' is the message.
+	 * However, we do want to print it if the command has been shortened
+	 * and an ellipsis has been prepended to it.
+	 */
+	if (strncmp(badcmd, packet->data, badcmdlen) == 0 &&
+			(unsigned char) packet->data[badcmdlen] != 0x0a &&
+					(packet->data[badcmdlen] != '.' ||
+					 packet->data[badcmdlen + 1] == '.')) {
+		fputs(badcmd, stdout);
+		putchar('\n');
+		offset += badcmdlen;
+	} else if (strncmp(badarg, packet->data, badarglen) == 0 &&
+			(unsigned char) packet->data[badarglen] != 0x0a) {
+		fputs(badarg, stdout);
+		putchar('\n');
+		offset += badarglen;
 	}
-	// strip colors
-	else {
-		for (i = 0; (unsigned char) packet->data[i] != 0; ++i) {
-			if ((unsigned char) packet->data[i] == 0xc2 && (unsigned char) packet->data[i+1] == 0xa7) {
-				i+=2;
-				continue;
-			}	
-			putchar(packet->data[i]);
+
+	const char *color_chars = "\xc2\x0a";
+	while ((unsigned char) packet->data[offset] != 0) {
+		size_t color_index = strcspn(packet->data + offset, color_chars);
+		fprintf(stdout, "%.*s", (int) color_index, packet->data + offset);
+		offset += color_index;
+		const unsigned char color_char = packet->data[offset];
+
+		if (color_char == 0x0a) {
+			++offset;
+			putchar('\n');
+                        // cancel coloring
+			if (global_disable_colors == 0)
+				print_color(def_color);
+		} else if ((unsigned char) packet->data[offset + 1] == 0xa7) {
+			if (global_disable_colors == 0)
+				print_color(packet->data[offset + 2]);
+			offset += 3;
 		}
 	}
 
 	// print newline if string has no newline
-	if (packet->data[i-1] != 10 && packet->data[i-1] != 13) putchar('\n');
+	if (packet->data[offset - 1] != 10 && packet->data[offset - 2] != 13) {
+		putchar('\n');
+		if (global_disable_colors == 0) {
+			print_color(def_color);
+		}
+	}
 }
 
 rc_packet *packet_build(int id, int cmd, char *s1)
@@ -667,7 +695,7 @@ int run_terminal_mode(int sock)
 
 		/* Special case for "stop" command to prevent server-side bug.
 		 * https://bugs.mojang.com/browse/MC-154617
-		 * 
+		 *
 		 * NOTE: This is hacky workaround which should be handled better to
 		 *       ensure compatibility with other servers using source RCON.
 		 * NOTE: strcasecmp() is POSIX function.
@@ -697,7 +725,7 @@ int get_line(char *buffer, int bsize)
 
 	int len = strlen(buffer);
 
-	// clean input buffer if needed 
+	// clean input buffer if needed
 	if (len == bsize - 1) {
 		int ch;
 		while ((ch = getchar()) != '\n' && ch != EOF);
