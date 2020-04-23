@@ -47,6 +47,11 @@
     #include <netdb.h>
 #endif
 
+#include <readline/readline.h>
+#include <readline/history.h>
+#include <stdio.h>
+#include <stdlib.h>
+
 #define VERSION "0.7.1"
 #define IN_NAME "mcrcon"
 #define VER_STR IN_NAME" "VERSION" (built: "__DATE__" "__TIME__")"
@@ -649,12 +654,15 @@ int run_terminal_mode(int sock)
 {
 	int ret = 0;
 	char command[DATA_BUFFSIZE] = {0x00};
+	char* buf;
 
 	puts("Logged in. Type 'quit' or 'exit' to quit.");
 
-	while (global_connection_alive) {
-		putchar('>');
-		int len = get_line(command, DATA_BUFFSIZE);
+	while (global_connection_alive && (buf = readline(">> ")) != NULL) {
+		//putchar('>');
+		//int len = get_line(command, DATA_BUFFSIZE);
+		int len = strlen(buf);
+		strncpy(command, buf, DATA_BUFFSIZE);
 
 		if ((strcasecmp(command, "exit") && strcasecmp(command, "quit")) == 0)
 			break;
@@ -662,8 +670,10 @@ int run_terminal_mode(int sock)
 		if(command[0] == 'Q' && command[1] == 0)
 			break;
 
-		if(len > 0 && global_connection_alive)
+		if(len > 0 && global_connection_alive) {
+			add_history(buf);
 			ret += rcon_command(sock, command);
+		}
 
 		/* Special case for "stop" command to prevent server-side bug.
 		 * https://bugs.mojang.com/browse/MC-154617
@@ -672,6 +682,7 @@ int run_terminal_mode(int sock)
 		 *       ensure compatibility with other servers using source RCON.
 		 * NOTE: strcasecmp() is POSIX function.
 		 */
+		free(buf);
 		if (strcasecmp(command, "stop") == 0) {
 			break;
 		}
