@@ -52,6 +52,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "rc.h"
+#include "net.h"
+
 #define VERSION "0.7.1"
 #define IN_NAME "mcrcon"
 #define VER_STR IN_NAME" "VERSION" (built: "__DATE__" "__TIME__")"
@@ -62,32 +65,10 @@
 #define RCON_AUTH_RESPONSE      2
 #define RCON_PID                0xBADC0DE
 
-#define DATA_BUFFSIZE 4096
-
-// rcon packet structure
-typedef struct _rc_packet {
-    int size;
-    int id;
-    int cmd;
-    char data[DATA_BUFFSIZE];
-    // ignoring string2 for now
-} rc_packet;
-
 
 // ===================================
 //  FUNCTION DEFINITIONS              
 // ===================================
-
-// Network related functions
-#ifdef _WIN32
-void        net_init_WSA(void);
-#endif
-void        net_close(int sd);
-int         net_connect(const char *host, const char *port);
-int         net_send(int sd, const uint8_t *buffer, size_t size);
-int         net_send_packet(int sd, rc_packet *packet);
-rc_packet*  net_recv_packet(int sd);
-int         net_clean_incoming(int sd, int size);
 
 // Misc stuff
 void        usage(void);
